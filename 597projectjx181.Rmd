@@ -1,0 +1,643 @@
+---
+title: "597 project"
+author: "Jessica Xu"
+date: "2021/5/1"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(ggrepel)
+library(lubridate)
+
+```
+
+```{r}
+netflix <- read.csv('netflix.csv', na.strings = c("", "NA"), stringsAsFactors = FALSE)
+
+#check missing data
+sum(is.na(netflix))
+colSums(is.na(netflix))
+```
+```{r}
+## change categorical variable, from character to factor
+netflix$rating <- as.factor(netflix$rating)
+netflix$listed_in <- as.factor(netflix$listed_in)
+netflix$type <- as.factor(netflix$type)
+```
+
+
+```{r}
+
+netflix$date_added2 <- mdy(netflix$date_added)#convert the date the movie was added to date time 
+ 
+netflix <- netflix %>%  #create a column for the month and week day
+  mutate(month = month(date_added2, label = TRUE, abbr = FALSE),
+         day = wday(date_added2, label = TRUE, abbr = FALSE))
+netflix$type <- factor(netflix$type, 
+                       levels = c("TV Show", "Movie"))
+netflix$month<- factor(netflix$month, 
+                       levels = c("January", "February", 
+                                  "March", "April", "May",
+                                  "June", "July", "August",
+                                  "September", "October",
+                                  "November", "December"))
+netflix$day <- factor(netflix$day, 
+                      levels = c("Monday", "Tuesday", 
+                                 "Wednesday", "Thursday",
+                                 "Friday", "Saturday", 
+                                 "Sunday"))
+
+#plot showing months with highest release
+netflix %>%
+  filter(!is.na(month)) %>%
+  group_by(month) %>%
+  summarize(count = n()) %>% 
+  ggplot(aes(x =reorder(month, count), y = count, fill = month)) +
+  geom_bar(stat = "identity") +
+  xlab("months of the year") +
+  ylab("Number of Movies") +
+  ggtitle("Number of movies released by year") +
+  coord_flip()
+
+netflix %>% 
+  filter(!is.na(day)) %>% 
+  group_by(day) %>% 
+  summarize(count = n()) %>% 
+  ggplot(aes(x = reorder(day, count), y = count, fill = day)) +
+  geom_bar(stat = "identity") +
+  xlab("days of the week") +
+  ylab("Number of Movies") +
+  ggtitle("Number of movies released by days of the week") +
+  coord_flip()
+```
+
+```{r}
+##change the date format 
+head(netflix$date_added) 
+netflix$date_added <- mdy(netflix$date_added)
+head(netflix$date_added) 
+```
+
+
+```{r}
+head(netflix)
+summary(netflix)
+```
+```{r}
+glimpse(netflix)
+```
+
+
+
+
+```{r}
+table(netflix$type)
+netflix %>%
+  count(type) %>%
+  
+  ggplot() + 
+  geom_col(aes(x = type, y = n, fill = type)) +
+  labs(title = "Show Types") +
+  theme_minimal()
+
+###
+netflix %>% count(type, sort = T) %>%
+  
+  mutate(prop = paste0(round(n / sum(n) * 100, 0), "%")) %>%
+  ggplot(aes(x = "", y = prop, fill = type)) +
+  geom_bar(
+    stat = "identity",
+    width = 1,
+    color = "steelblue",
+    size = 1
+  ) +
+  coord_polar("y", start = 0) +
+  geom_text(
+    aes(y = prop, label = prop),
+    position = position_stack(vjust = 0.5),
+    size = 6,
+    col = "white",
+    fontface = "bold"
+  ) +
+  scale_fill_manual (values = c('#e41a1c', '#377eb8')) +
+  theme_void() +
+  labs(
+    title =  'Proportion of Movies to TV shows',
+    fill = ""
+  )
+
+```
+
+
+```{r}
+# netflix %>% filter(title=="Black Mirror: Bandersnatch")
+```
+
+
+```{r}
+library(broom)
+
+movies<- netflix %>% select(country, type, duration, rating, title) %>%
+  filter(type == "Movie") %>%
+  drop_na() %>% 
+  mutate(duration_min = parse_number(duration))
+movies %>% 
+  select(title, duration_min) %>% 
+  filter(duration_min > 200) %>% 
+  arrange(desc(duration_min)) 
+movies %>% 
+  select(title, duration_min) %>% 
+  arrange(desc(duration_min)) %>% 
+  ggplot () + 
+  geom_histogram(aes(x=duration_min),fill='dark red') +
+  labs(title='Distribution of Movie Duration')
+
+
+
+###
+tv_show <- netflix %>% select(country, type, duration, rating, title) %>%
+  filter(type == "TV Show") %>% 
+  drop_na() %>% 
+  mutate(duration_season = parse_number(duration))
+tv_show %>% 
+  select(title, duration_season) %>% 
+  filter(duration_season > 10) %>% 
+  arrange(desc(duration_season))
+tv_show %>% 
+  select(title, duration_season) %>% 
+  arrange(desc(duration_season))%>%  
+  ggplot () + 
+  geom_histogram(aes(x=duration_season),fill='dark blue',size=3) +
+  labs(title='Distribution of TV Shows Duration') 
+```
+```{r}
+tv_show %>% select(duration_season) %>%
+  count(duration_season, sort = TRUE) %>%
+  ggplot(aes(
+    x = as.factor(duration_season),
+    y = n,
+    label = n
+  )) +
+  geom_col(aes(fill = duration_season)) +
+  geom_text(vjust = -0.5, size = 3, col = "darkblue") +
+  theme_light() +
+  theme(legend.position = "none") +
+  labs(x = "Season duration",
+       y = "Count",
+    title = "Distribution of TV Shows Duration",
+    fill = ""
+  )
+```
+
+```{r}
+####
+netflix %>%
+  filter(type == 'Movie') %>%
+  mutate(duration_in_mins=parse_number(duration))%>%
+  summarise(mean_duration=mean(duration_in_mins)) 
+
+netflix %>%
+  filter(type == 'Movie') %>%
+  mutate(duration = parse_number(duration)) %>%
+  summarise(mean_duration = mean(duration),
+           median_duration = median(duration))
+
+netflix %>%
+  filter(type == 'Movie') %>%
+  mutate(duration = parse_number(duration)) %>%
+  ggplot () + 
+  geom_histogram (aes(x=duration),fill='dark blue') +
+  labs(title='Distribution of Movie Duration') 
+
+```
+
+```{r}
+netflix %>%
+  filter(!str_detect(country,',')) %>%
+  group_by(country) %>%
+  count() %>%
+  arrange(desc(n)) %>%
+  head(20) %>%
+  ggplot() + geom_col(aes(y = reorder(country,n), x = n, fill=reorder(country,n)), width = 0.4) +
+  geom_label(aes(y = reorder(country,n), x = n, label = n)) +
+  labs(title = 'Number of Shows of each Country') 
+```
+
+```{r}
+#netflix$date_added <- as.Date(netflix$date_added, format = "%B %d, %Y")
+
+# Number of shows available in Netflix as a function of time
+df_by_date <- netflix %>% 
+  group_by(date_added,type) %>% 
+  summarise(addedToday = n()) %>% 
+  ungroup() %>% group_by(type) %>% 
+  mutate(Total_Number_of_Shows = cumsum(addedToday), 
+         label = if_else(date_added == max(date_added,na.rm = T), 
+                         as.character(type), NA_character_))
+
+
+df_by_date  %>% ggplot(aes(x = date_added, y = Total_Number_of_Shows, color = type)) + 
+  geom_line() + 
+  theme_bw() + 
+  scale_x_date(date_breaks = '2 years', date_labels = "%Y") + 
+  theme(legend.position = 'none') + 
+  geom_text_repel(aes(label = label), size = 8,na.rm = TRUE, nudge_y = 100)+
+  labs(title = "Number of Shows in Netflix by Time",
+       x = "years", y = "number of shows") +
+  theme_minimal()
+```
+Which countries are producing most shows ?
+```{r}
+netflix %>% 
+  filter(country!='NA') %>%
+  group_by(type) %>% 
+  mutate(country = fct_infreq(country))%>%
+  count(country)
+
+netflix %>% 
+  filter(country!='NA') %>%
+  group_by(type) %>% 
+  mutate(country = fct_infreq(country)) %>% 
+  
+  ggplot(aes(x = country, fill=type)) + 
+  geom_histogram(stat = 'count') + 
+  facet_wrap(~type, scales = 'free_x') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  coord_cartesian(xlim = c(1,10)) + 
+  scale_x_discrete(labels = function(x){str_wrap(x,20)}, breaks = function(x) {x[1:10]})
+##From the above, we can see that: After United States, India is the largest source of Movies listed on Netflix, and UK is the third. While many of the Indian movies ended up on Netflix, it looks like there are not as many Indian TV shows. A large number of listings also seem to have missing country information, which could possibly be inferred from the cast etc.
+```
+#####
+```{r}
+show_categories <- netflix %>% 
+  select(c('show_id','type','listed_in')) %>% 
+  separate_rows(listed_in, sep = ',') %>%
+  rename(Show_Category = listed_in)
+
+show_categories$Show_Category <- trimws(show_categories$Show_Category)
+head(show_categories)
+```
+```{r}
+show_categories %>% 
+  mutate(Show_Category = fct_infreq(Show_Category)) %>% 
+  group_by(type)%>%
+  count(Show_Category)
+
+show_categories %>% 
+  mutate(Show_Category = fct_infreq(Show_Category)) %>% 
+  
+  ggplot(aes(x = Show_Category, fill=type)) + 
+  geom_bar() + 
+  scale_x_discrete() + 
+  facet_wrap(~type, scales = 'free_x') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  theme() + coord_cartesian(xlim = c(1,20))
+```
+
+```{r}
+##############
+df_unique_categories <- show_categories %>% 
+  group_by(type,Show_Category) %>%  
+  summarise()
+
+df_category_correlations_movies <- 
+  data.frame(expand_grid(type = 'Movie', 
+                         Category1 = subset(df_unique_categories, type == 'Movie')$Show_Category,
+                         Category2 = subset(df_unique_categories, type == 'Movie')$Show_Category))
+                                  
+df_category_correlations_TV <- 
+  data.frame(expand_grid(type = 'TV Show',
+                         Category1 = subset(df_unique_categories, type == 'TV Show')$Show_Category,
+                         Category2 = subset(df_unique_categories, type == 'TV Show')$Show_Category))
+                                 
+df_category_correlations <- rbind(df_category_correlations_movies,df_category_correlations_TV)
+df_category_correlations$matched_count <- 
+  apply(df_category_correlations, MARGIN = 1,FUN = function(x) 
+  {
+    length(intersect(subset(show_categories,type == x['type'] & Show_Category == x['Category1'])$show_id,
+                     subset(show_categories, type == x['type'] & Show_Category == x['Category2'])$show_id))
+    })
+
+df_category_correlations <- 
+  subset(df_category_correlations, (as.character(Category1) < as.character(Category2)) & (matched_count > 0))
+
+# Change plot size to 8 x 3
+options(repr.plot.width=14, repr.plot.height=10)
+
+ggplot(subset(df_category_correlations, type == 'Movie'), 
+       aes(x = Category1, y = Category2, fill = matched_count)) + 
+  geom_tile() + facet_wrap( ~type, scales = 'free') +   
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))  + 
+  scale_fill_distiller(palette = "Spectral") + 
+  theme(legend.text = element_text(size = 14), legend.title = element_text(size = 16))
+```
+
+
+
+```{r}
+netflix %>%
+ select(listed_in) %>%
+ mutate(listed_in = str_split(listed_in,',')) %>%
+ unnest(listed_in) %>%
+ group_by(listed_in) %>%
+ count() %>%
+ arrange(desc(n)) %>%
+ head(30)
+
+
+netflix %>%
+ select(listed_in) %>%
+ mutate(listed_in = str_split(listed_in,',')) %>%
+ unnest(listed_in) %>%
+ group_by(listed_in) %>%
+ count() %>%
+ arrange(desc(n)) %>%
+ head(30) %>%
+ ggplot() + geom_col(aes(y = reorder(listed_in,n), x = n, fill=n)) +
+ labs(title = 'Category of Movie and TV Shows',
+     x = 'Count',
+     y = 'Genre') +
+  geom_label(aes(y = reorder(listed_in,n), x = n, label = n),size=2) +
+theme_minimal()
+```
+
+
+
+
+```{r}
+netflix %>% 
+  select(c('show_id','cast','director')) %>% 
+  gather(key = 'role', value = 'person', cast, director) %>% 
+  filter(person != "") %>% 
+  separate_rows(person, sep = ',') -> show_people
+
+show_people$person <- trimws(show_people$person)
+head(show_people)
+```
+
+```{r}
+people_freq <- show_people %>% 
+  group_by(person,role) %>% 
+  summarise(count = n()) %>% 
+  arrange(desc(count))
+
+
+people_freq %>% 
+  group_by(role) %>% 
+  top_n(10,count) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = fct_reorder(person,count,.desc = T), y = count, fill = role)) + 
+  geom_bar(stat = 'identity') + 
+  scale_x_discrete() + facet_wrap(~role, scales = 'free_x') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  theme(legend.position = 'none') + labs(x = 'Name of the actor / director')
+```
+##What kind of genres do top actors (by frequency) belong to?
+```{r}
+netflix$listed_in <- trimws(netflix$listed_in, which = c("left"))
+
+
+ df_cast <- netflix %>% 
+    mutate(cast = strsplit(as.character(cast), ",")) %>% 
+    unnest(cast) %>%
+    mutate(cast = trimws(cast, which = c("left"))) %>% #eliminate space on the left side
+    group_by(cast)%>%
+    add_tally()%>%
+    select(cast,n,listed_in) %>%
+      unique()
+  
+df_actor_top <- df_cast[order(-df_cast$n),]
+
+#count the genres 
+df_actor_top_genre <- df_actor_top %>%
+  select(cast, listed_in) %>%
+  mutate(listed_in = strsplit(as.character(listed_in), ",")) %>% 
+  unnest(listed_in) %>%
+  mutate(listed_in = trimws(listed_in, which = c("left"))) %>% #eliminate space on the left side
+  group_by(cast,listed_in)%>%
+  add_tally()%>%
+      unique()
+  
+df_actor_top_only <- df_actor_top[,1:2]
+df_actor_top_only <- df_actor_top_only %>% 
+    unique()
+df_actor_top_only <- df_actor_top_only[1:30,]
+
+df_actor_top_only <- df_actor_top_only[order(-df_actor_top_only$n),]
+
+df_actor_top_5_genre <- df_actor_top_genre %>% 
+  filter(cast == df_actor_top_only[1,1] | cast == df_actor_top_only[2,1] |cast == df_actor_top_only[3,1]|cast == df_actor_top_only[4,1] | cast == df_actor_top_only[5,1] |cast == df_actor_top_only[6,1])
+```
+
+
+```{r}
+pie <- ggplot(data = df_actor_top_5_genre, aes(x = "", y = n, fill = listed_in )) + 
+  facet_wrap(~ cast)  +
+  geom_bar(stat = "identity",position = position_fill()) +
+  coord_polar(theta = "y") +
+  theme_minimal()+
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank())+
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid  = element_blank())+
+  theme(legend.title = element_blank())+
+  labs(title="Genre distribution for 6 most frequent actors")
+
+pie
+```
+
+```{r}
+netflix  %>% 
+  count(release_year) %>%
+  arrange(desc(n)) %>%
+  ggplot() +
+  geom_col(aes(x = release_year, y = n,color=n))
+```
+#Where do the majority of movies available on Netflix come from?
+```{r}
+sum(is.na(netflix$country))
+
+# split the column of countries at the comma and then unest it into multiple rows
+ df_country <- netflix %>% 
+    filter(country != 'NA') %>%
+    mutate(country = strsplit(as.character(country), ",")) %>% 
+    unnest(country) %>%
+      mutate(country = trimws(country, which = c("left"))) #eliminate space on the left side
+ 
+ df_country <- df_country %>%
+  group_by(country)%>%
+    add_tally()
+  
+ df_country <- df_country%>%
+   select(country,n,type) %>%
+   unique()
+ df_country_top5 <- df_country[order(-df_country$n),]
+ 
+
+ 
+ df_country_top5 <- df_country_top5[1:35,]
+ df_country_top5
+ 
+ ggplot(df_country_top5, aes(x = reorder(country, n), y = n, fill = type))+
+   geom_bar(stat = "identity")+
+   coord_flip()+
+   theme_classic()+
+  theme(axis.title.x = element_blank(),
+          axis.title.y = element_blank())+
+  labs(title="Content available per country", x = "Amount of content")
+```
+##What are the most frequent words used in movie titles?
+```{r}
+library(tokenizers)
+library(wordcloud)
+
+# 
+# tot_title <- paste(netflix[,3],collapse=" ")
+# tot_title_words <-  tokenize_words(tot_title)
+# words.freq<-table(unlist(tot_title_words))
+# 
+# result <- cbind.data.frame(words = names(words.freq),amount = as.integer(words.freq)) ## You might consider using cbind.data.frame instead of cbind
+# 
+# result_dec <- result[order(-result$amount),]
+# 
+# result_dec_filter <- result_dec %>%
+#   filter(nchar( as.character(words)) > 3)
+# 
+# wordcloud(words = result_dec_filter$word, freq = result_dec_filter$amount, min.freq = 1,  max.words=150, random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Set2"))
+```
+```{r}
+library(tokenizers)
+library(wordcloud)
+library(tidytext)
+desc_words_m <- netflix %>% select(type, show_id, description) %>%
+  filter(type == "Movie") %>% 
+    unnest_tokens(word, description) %>%
+    anti_join(stop_words)
+count_word <- desc_words_m %>% count(word, sort = TRUE)
+wordcloud(words = count_word$word,  
+          freq = count_word$n, 
+          min.freq = 55,  
+          max.words = nrow(count_word), 
+          random.order = FALSE,  
+          rot.per = 0.1,  
+          colors = brewer.pal(8, "Dark2")) 
+#Life, Women, Love, Friends, Family, Home, world
+```
+
+```{r}
+desc_words_tv <- netflix %>% select(type, show_id, description) %>%
+  filter(type == "TV Show") %>% 
+    unnest_tokens(word, description) %>%
+    anti_join(stop_words)
+
+count_word <- desc_words_tv %>%
+   count(word, sort = TRUE)
+
+
+wordcloud(words = count_word$word,  
+          freq = count_word$n, 
+          min.freq = 30,  
+          max.words = nrow(count_word), 
+          random.order = FALSE,  
+          rot.per = 0.1,  
+          colors = brewer.pal(8, "Dark2")) 
+
+#World, Life, Love, Lives, Friends, Family, School are the most frequent words
+```
+```{r}
+# titles=str_flatten(netflix[,3],collapse = '')
+# titles_split=tokenize_words(titles)
+# word_freq=table(unlist(titles_split))
+# 
+# result=cbind.data.frame(words=names(word_freq),
+#                         word_count=as.integer(word_freq))
+# result_top=result%>%arrange(desc(word_count))%>%
+#            filter(nchar(as.character(words))>3)
+# 
+# cloud=wordcloud(words = result_top$words,freq = result_top$word_count,min.freq = 1,
+#               max.words = 200,random.order = F,
+#               rot.per =0.35, colors=brewer.pal(8,"Dark2"))
+```
+
+```{r}
+##Rating by Type
+
+r<-netflix %>% select(rating, type) %>%
+  filter(!is.na(rating)) %>%
+  mutate(rating = fct_lump(rating, 5)) %>%
+  group_by(rating, type) %>%
+  summarise(Count = n()) %>%
+  arrange(desc(Count))
+r %>% filter(type=='Movie')
+r %>% filter(type=='TV Show')
+r %>% 
+  ggplot(aes(x = type, y = Count, fill = rating)) + 
+  geom_bar(stat = 'identity') 
+
+```
+
+```{r}
+library(plotly)
+
+netflix %>% select(rating, type) %>%
+  filter(!is.na(rating)) %>%
+  mutate(rating = fct_lump(rating, 5)) %>%
+  group_by(rating, type) %>%
+  summarise(Count = n()) %>%
+  arrange(Count) %>%
+  plot_ly(
+    x = ~ type ,
+    y = ~ Count,
+    type = "bar",
+    color = ~ rating,
+    text = ~ Count,
+    textposition = 'outside',
+    textfont = list(color = '#000000', size = 12)
+  ) %>%
+  layout(yaxis = list(categoryorder = "array",
+                      categoryarray = ~ Count)) %>%
+  layout(
+    title = "Rating by Type",
+    yaxis = list(title = "Type"),
+    xaxis = list(title = "Count"),
+    legend = list(title = list(text = '<b> Rating </b>'))
+  )
+```
+
+```{r}
+k <- strsplit(netflix$country, split = ", ")
+
+netds_countries<- data.frame(type = rep(netflix$type, sapply(k, length)), country = unlist(k))
+netds_countries$country <- as.character(netds_countries$country)
+
+amount_by_country <- na.omit(netds_countries) %>%
+  group_by(country, type) %>%
+  summarise(count = n())
+
+u <- reshape(data=data.frame(amount_by_country),idvar="country",
+                          v.names = "count",
+                          timevar = "type",
+                          direction="wide") %>% arrange(desc(count.Movie)) %>%
+                          top_n(10)
+names(u)[2] <- "Number_of_Movies"
+names(u)[3] <- "Number_of_TV_Shows"
+u <- u[order(desc(u$Number_of_Movies +u$Number_of_TV_Shows)),]
+
+library(ggplot2)
+figure000 <- ggplot(u, aes(Number_of_Movies, Number_of_TV_Shows, colour=country))+ 
+  geom_point(size=5)+
+  xlab("Number of Movies") + ylab("Number of TV Shows")+
+  ggtitle("Amount of Netflix Content By Top 10 Country")
+figure000
+```
+
